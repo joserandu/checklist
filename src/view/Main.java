@@ -1,112 +1,96 @@
 package view;
 
 import dao.TarefaDAO;
+import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.Stage;
 import model.Tarefa;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
 import java.util.List;
 
-public class Main {
+public class Main extends Application {
+
+    private VBox taskListContainer;
+    private TarefaDAO dao = new TarefaDAO();
+    private ComboBox<String> filtroCombo;
+
     public static void main(String[] args) {
-        JFrame frame = new JFrame("Checklist");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(480, 500);
+        launch(args);
+    }
 
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    @Override
+    public void start(Stage stage) {
+        TextField taskField = new TextField();
+        taskField.setPromptText("Digite a tarefa");
 
-        JTextField taskField = new JTextField();
-        taskField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        panel.add(taskField);
-        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        Button addButton = new Button("Adicionar");
+        HBox inputBox = new HBox(10, taskField, addButton);
 
-        JButton addButton = new JButton("Adicionar Tarefa");
-        addButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(addButton);
-        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        filtroCombo = new ComboBox<>();
+        filtroCombo.getItems().addAll("Todas", "Pendentes", "Concluídas");
+        filtroCombo.setValue("Todas");
 
-        JPanel tasksPanel = new JPanel();
-        tasksPanel.setLayout(new BoxLayout(tasksPanel, BoxLayout.Y_AXIS));
-        tasksPanel.setAlignmentY(Component.TOP_ALIGNMENT);
+        taskListContainer = new VBox(10);
+        ScrollPane scrollPane = new ScrollPane(taskListContainer);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(400);
 
-        JScrollPane scrollPane = new JScrollPane(tasksPanel);
-        scrollPane.setPreferredSize(new Dimension(400, 300));
-        panel.add(scrollPane);
+        VBox root = new VBox(15, inputBox, filtroCombo, scrollPane);
+        root.setPadding(new Insets(20));
 
-        TarefaDAO dao = new TarefaDAO();
-
-        final Runnable[] renderTasks = new Runnable[1];
-
-        renderTasks[0] = () -> {
-            tasksPanel.removeAll();
-            List<Tarefa> tarefas = dao.listar();
-            for (Tarefa t : tarefas) {
-                JPanel taskItemPanel = new JPanel();
-                taskItemPanel.setLayout(new BoxLayout(taskItemPanel, BoxLayout.X_AXIS));
-                taskItemPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                taskItemPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-                taskItemPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-
-                JCheckBox checkBox = new JCheckBox();
-                checkBox.setOpaque(false);
-                checkBox.setSelected(t.concluida);
-
-                JLabel taskLabel = new JLabel("<html><div style='width:250px;'>" +
-                        (t.concluida ? "<strike>" + t.descricao + "</strike>" : t.descricao) +
-                        "</div></html>");
-
-                JButton deleteButton = new JButton("Excluir");
-                deleteButton.setFocusPainted(false);
-                deleteButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-                checkBox.addItemListener(e -> {
-                    dao.atualizarConclusao(t.id, checkBox.isSelected());
-                    renderTasks[0].run();
-                });
-
-                deleteButton.addActionListener(e -> {
-                    dao.remover(t.id);
-                    renderTasks[0].run();
-                });
-
-                taskItemPanel.add(checkBox);
-                taskItemPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-                taskItemPanel.add(taskLabel);
-                taskItemPanel.add(Box.createHorizontalGlue());
-                taskItemPanel.add(deleteButton);
-
-                tasksPanel.add(taskItemPanel);
-            }
-            tasksPanel.revalidate();
-            tasksPanel.repaint();
-        };
-
-        addButton.addActionListener(e -> {
-            String taskText = taskField.getText().trim();
-            if (!taskText.isEmpty()) {
-                dao.adicionar(taskText);
-                taskField.setText("");
-                renderTasks[0].run();
+        addButton.setOnAction(e -> {
+            String text = taskField.getText().trim();
+            if (!text.isEmpty()) {
+                dao.adicionar(text);
+                taskField.clear();
+                renderTasks();
             }
         });
 
-        taskField.addKeyListener(new KeyAdapter() {
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    addButton.doClick();
-                }
-            }
-        });
+        filtroCombo.setOnAction(e -> renderTasks());
 
-        frame.add(panel);
-        frame.setVisible(true);
+        renderTasks();
 
-        SwingUtilities.invokeLater(() -> {
-            taskField.requestFocusInWindow();
-            renderTasks[0].run();
-        });
+        Scene scene = new Scene(root, 500, 500);
+        stage.setTitle("Checklist");
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    private void renderTasks() {
+        taskListContainer.getChildren().clear();
+        String filtro = filtroCombo.getValue();
+        List<Tarefa> tarefas = dao.listar(filtro);
+
+        for (Tarefa t : tarefas) {
+            CheckBox checkBox = new CheckBox();
+            checkBox.setSelected(t.concluida);
+
+            String descricao = t.concluida ? t.descricao + " (concluída)" : t.descricao;
+            Label label = new Label(descricao + "\n" + (t.dataAlteracao != null ? t.dataAlteracao : ""));
+            label.setWrapText(true);
+
+            Button deleteButton = new Button("Excluir");
+
+            HBox taskBox = new HBox(10, checkBox, label, deleteButton);
+            taskBox.setPadding(new Insets(5));
+            taskBox.setHgrow(label, Priority.ALWAYS);
+            taskBox.setStyle("-fx-background-color: #f4f4f4; -fx-border-color: lightgray;");
+
+            checkBox.setOnAction(e -> {
+                dao.atualizarConclusao(t.id, checkBox.isSelected());
+                renderTasks();
+            });
+
+            deleteButton.setOnAction(e -> {
+                dao.remover(t.id);
+                renderTasks();
+            });
+
+            taskListContainer.getChildren().add(taskBox);
+        }
     }
 }
