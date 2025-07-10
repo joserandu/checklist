@@ -1,139 +1,96 @@
 package view;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import dao.TarefaDAO;
+import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.Stage;
+import model.Tarefa;
 
-/**
- * Classe principal da aplicação de Checklist.
- * Permite adicionar tarefas, marcar como concluídas e excluir da lista.
- */
-public class Main {
+import java.util.List;
 
-    /**
-     * Método principal que inicializa e exibe a interface gráfica da aplicação.
-     * @param args Argumentos de linha de comando (não utilizados)
-     */
+public class Main extends Application {
+
+    private VBox taskListContainer;
+    private TarefaDAO dao = new TarefaDAO();
+    private ComboBox<String> filtroCombo;
+
     public static void main(String[] args) {
-        // Criação da janela principal
-        JFrame frame = new JFrame("Checklist");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(480, 500);
+        launch(args);
+    }
 
-        // Painel principal com layout vertical
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10)); // margem interna
+    @Override
+    public void start(Stage stage) {
+        TextField taskField = new TextField();
+        taskField.setPromptText("Digite a tarefa");
 
-        // Campo de texto para digitar nova tarefa
-        JTextField taskField = new JTextField();
-        taskField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        panel.add(taskField);
-        panel.add(Box.createRigidArea(new Dimension(0, 10))); // espaço vertical
+        Button addButton = new Button("Adicionar");
+        HBox inputBox = new HBox(10, taskField, addButton);
 
-        // Botão para adicionar nova tarefa
-        JButton addButton = new JButton("Adicionar Tarefa");
-        addButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(addButton);
-        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        filtroCombo = new ComboBox<>();
+        filtroCombo.getItems().addAll("Todas", "Pendentes", "Concluídas");
+        filtroCombo.setValue("Todas");
 
-        // Painel onde as tarefas serão exibidas
-        JPanel tasksPanel = new JPanel();
-        tasksPanel.setLayout(new BoxLayout(tasksPanel, BoxLayout.Y_AXIS));
-        tasksPanel.setAlignmentY(Component.TOP_ALIGNMENT);
+        taskListContainer = new VBox(10);
+        ScrollPane scrollPane = new ScrollPane(taskListContainer);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(400);
 
-        // Scroll para exibir as tarefas
-        JScrollPane scrollPane = new JScrollPane(tasksPanel);
-        scrollPane.setPreferredSize(new Dimension(400, 300));
-        panel.add(scrollPane);
+        VBox root = new VBox(15, inputBox, filtroCombo, scrollPane);
+        root.setPadding(new Insets(20));
 
-        /**
-         * Função responsável por adicionar uma nova tarefa à lista.
-         * Cria um painel com checkbox, label com texto, e botão de exclusão.
-         */
-        Runnable addTask = () -> {
-            String taskText = taskField.getText().trim();
-
-            // Ignora entradas vazias
-            if (!taskText.isEmpty()) {
-
-                // Painel de item de tarefa (horizontal)
-                JPanel taskItemPanel = new JPanel();
-                taskItemPanel.setLayout(new BoxLayout(taskItemPanel, BoxLayout.X_AXIS));
-                taskItemPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                taskItemPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-                taskItemPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-
-                // Checkbox para marcar como concluída
-                JCheckBox checkBox = new JCheckBox();
-                checkBox.setOpaque(false);
-
-                // Label da tarefa com quebra de linha automática
-                JLabel taskLabel = new JLabel("<html><div style='width:250px;'>" + taskText + "</div></html>");
-
-                // Botão para excluir tarefa
-                JButton deleteButton = new JButton("Excluir");
-                deleteButton.setFocusPainted(false);
-                deleteButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-                // Evento ao marcar/desmarcar a tarefa
-                checkBox.addItemListener(e -> {
-                    if (checkBox.isSelected()) {
-                        // Risco no texto se concluída
-                        taskLabel.setText("<html><div style='width:250px;'><strike>" + taskText + "</strike></div></html>");
-                        // Move o item para o fim da lista
-                        tasksPanel.remove(taskItemPanel);
-                        tasksPanel.add(taskItemPanel);
-                    } else {
-                        // Remove o risco se desmarcada
-                        taskLabel.setText("<html><div style='width:250px;'>" + taskText + "</div></html>");
-                    }
-                    tasksPanel.revalidate();
-                    tasksPanel.repaint();
-                });
-
-                // Evento para excluir tarefa
-                deleteButton.addActionListener(e -> {
-                    tasksPanel.remove(taskItemPanel);
-                    tasksPanel.revalidate();
-                    tasksPanel.repaint();
-                });
-
-                // Montagem visual do item da tarefa
-                taskItemPanel.add(checkBox);
-                taskItemPanel.add(Box.createRigidArea(new Dimension(5, 0))); // espaço entre checkbox e texto
-                taskItemPanel.add(taskLabel);
-                taskItemPanel.add(Box.createHorizontalGlue()); // empurra o botão para a direita
-                taskItemPanel.add(deleteButton);
-
-                // Adiciona no topo da lista
-                tasksPanel.add(taskItemPanel, 0);
-                tasksPanel.revalidate();
-                tasksPanel.repaint();
-
-                // Limpa o campo de entrada e mantém o foco
-                taskField.setText("");
-                taskField.requestFocusInWindow();
-            }
-        };
-
-        // Ação do botão de adicionar tarefa
-        addButton.addActionListener(e -> addTask.run());
-
-        // Ação de tecla ENTER no campo de texto
-        taskField.addKeyListener(new KeyAdapter() {
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    addTask.run();
-                }
+        addButton.setOnAction(e -> {
+            String text = taskField.getText().trim();
+            if (!text.isEmpty()) {
+                dao.adicionar(text);
+                taskField.clear();
+                renderTasks();
             }
         });
 
-        // Adiciona o painel à janela e exibe a interface
-        frame.add(panel);
-        frame.setVisible(true);
+        filtroCombo.setOnAction(e -> renderTasks());
 
-        // Garante que o campo de texto comece com o foco
-        SwingUtilities.invokeLater(taskField::requestFocusInWindow);
+        renderTasks();
+
+        Scene scene = new Scene(root, 500, 500);
+        stage.setTitle("Checklist");
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    private void renderTasks() {
+        taskListContainer.getChildren().clear();
+        String filtro = filtroCombo.getValue();
+        List<Tarefa> tarefas = dao.listar(filtro);
+
+        for (Tarefa t : tarefas) {
+            CheckBox checkBox = new CheckBox();
+            checkBox.setSelected(t.concluida);
+
+            String descricao = t.concluida ? t.descricao + " (concluída)" : t.descricao;
+            Label label = new Label(descricao + "\n" + (t.dataAlteracao != null ? t.dataAlteracao : ""));
+            label.setWrapText(true);
+
+            Button deleteButton = new Button("Excluir");
+
+            HBox taskBox = new HBox(10, checkBox, label, deleteButton);
+            taskBox.setPadding(new Insets(5));
+            taskBox.setHgrow(label, Priority.ALWAYS);
+            taskBox.setStyle("-fx-background-color: #f4f4f4; -fx-border-color: lightgray;");
+
+            checkBox.setOnAction(e -> {
+                dao.atualizarConclusao(t.id, checkBox.isSelected());
+                renderTasks();
+            });
+
+            deleteButton.setOnAction(e -> {
+                dao.remover(t.id);
+                renderTasks();
+            });
+
+            taskListContainer.getChildren().add(taskBox);
+        }
     }
 }
